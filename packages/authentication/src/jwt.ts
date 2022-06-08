@@ -4,6 +4,7 @@ import { IncomingMessage } from 'http'
 import { NotAuthenticated } from '@feathersjs/errors'
 import { Params } from '@feathersjs/feathers'
 import { createDebug } from '@feathersjs/commons'
+import { DISPATCH } from '@feathersjs/schema'
 // @ts-ignore
 import lt from 'long-timeout'
 
@@ -100,7 +101,7 @@ export class JWTStrategy extends AuthenticationBaseStrategy {
    * @param id The id to use
    * @param params Service call parameters
    */
-  async getEntity(id: string, params: Params) {
+  async getEntity<P extends Params>(id: string, params: P) {
     const entityService = this.entityService
     const { entity } = this.configuration
 
@@ -116,6 +117,10 @@ export class JWTStrategy extends AuthenticationBaseStrategy {
 
     if (!params.provider) {
       return result
+    }
+
+    if (result[DISPATCH]) {
+      return result[DISPATCH]
     }
 
     return entityService.get(id, { ...params, [entity]: result })

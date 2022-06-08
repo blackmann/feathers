@@ -1,13 +1,26 @@
 import assert from 'assert'
 import merge from 'lodash/merge'
-import { feathers, Application, Service } from '@feathersjs/feathers'
+import { feathers, Application, Service, HookContext, Params } from '@feathersjs/feathers'
 import { memory } from '@feathersjs/memory'
+import { resolve, resolveDispatch } from '@feathersjs/schema'
 
 import { AuthenticationService, JWTStrategy, hooks } from '../src'
 import { ServerResponse } from 'http'
 import { MockRequest } from './fixtures'
 
 const { authenticate } = hooks
+const userDispatchResolver = resolve<any, HookContext>({
+  converter: async (_data, ctx) => {
+    if (ctx.params.dispatch) {
+      return {
+        name: 'Dispatch user'
+      }
+    }
+
+    return null
+  },
+  properties: {}
+})
 
 describe('authentication/jwt', () => {
   let app: Application<{
@@ -51,6 +64,9 @@ describe('authentication/jwt', () => {
     })
 
     app.service('users').hooks({
+      around: {
+        all: [resolveDispatch(userDispatchResolver)]
+      },
       after: {
         get: [
           (context) => {
@@ -79,7 +95,7 @@ describe('authentication/jwt', () => {
     app.setup()
   })
 
-  it('getEntity', async () => {
+  it.only('getEntity', async () => {
     const [strategy] = app.service('authentication').getStrategies('jwt') as JWTStrategy[]
 
     let entity = await strategy.getEntity(user.id, {
@@ -88,16 +104,32 @@ describe('authentication/jwt', () => {
       }
     })
 
-    assert.deepStrictEqual(entity, user)
+    assert.deepStrictEqual(entity, user, 'returned internal entity')
 
     entity = await strategy.getEntity(user.id, {
       provider: 'rest'
     })
 
-    assert.deepStrictEqual(entity, {
-      ...user,
-      isExternal: true
+    assert.deepStrictEqual(
+      entity,
+      {
+        ...user,
+        isExternal: true
+      },
+      'Returned external entity'
+    )
+
+    entity = await strategy.getEntity<Params & { dispatch: boolean }>(user.id, {
+      dispatch: true
     })
+
+    assert.deepStrictEqual(
+      entity,
+      {
+        name: 'Dispatch user'
+      },
+      'returned dispatch entity'
+    )
   })
 
   describe('handleConnection', () => {
